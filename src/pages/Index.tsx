@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/components/auth/AuthContext";
 import HeaderBar from "@/components/pos/HeaderBar";
 import ProductSearchPanel from "@/components/pos/ProductSearchPanel";
 import CartPanel from "@/components/pos/CartPanel";
