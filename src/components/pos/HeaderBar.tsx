@@ -7,6 +7,8 @@ import {
   LogOut,
   User,
   ShoppingBag,
+  FileText,
+  Lock,
 } from "lucide-react";
 
 interface HeaderBarProps {
@@ -16,7 +18,10 @@ interface HeaderBarProps {
   onRecentSales: () => void;
   onAdminTools: () => void;
   onSignOut: () => void;
+  onAuditLog?: () => void;
+  onEndShift?: () => void;
   isAdmin?: boolean;
+  hasActiveSession?: boolean;
 }
 
 const HeaderBar = ({
@@ -26,7 +31,10 @@ const HeaderBar = ({
   onRecentSales,
   onAdminTools,
   onSignOut,
+  onAuditLog,
+  onEndShift,
   isAdmin = false,
+  hasActiveSession = false,
 }: HeaderBarProps) => {
   return (
     <header className="bg-pos-header text-pos-header-foreground h-14 flex items-center justify-between px-4 gap-3 shrink-0">
@@ -63,6 +71,30 @@ const HeaderBar = ({
           <Clock className="h-4 w-4" />
           <span className="hidden md:inline ml-1">Recent</span>
         </Button>
+
+        {onAuditLog && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onAuditLog}
+            className="text-pos-header-foreground hover:bg-pos-header-foreground/10"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="hidden md:inline ml-1">Audit</span>
+          </Button>
+        )}
+
+        {hasActiveSession && onEndShift && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onEndShift}
+            className="text-pos-header-foreground hover:bg-destructive/20 hover:text-destructive"
+          >
+            <Lock className="h-4 w-4" />
+            <span className="hidden md:inline ml-1">End Shift</span>
+          </Button>
+        )}
 
         {isAdmin && (
           <Button

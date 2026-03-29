@@ -8,6 +8,12 @@ import HeldBillsDrawer from "@/components/pos/HeldBillsDrawer";
 import RecentSalesPanel from "@/components/pos/RecentSalesPanel";
 import MobileTabBar from "@/components/pos/MobileTabBar";
 import { sampleProducts } from "@/components/pos/sampleData";
+import { CashSessionProvider, useCashSession } from "@/components/pos/cash-session/CashSessionContext";
+import OpeningCashDialog from "@/components/pos/cash-session/OpeningCashDialog";
+import ClosingCashDialog from "@/components/pos/cash-session/ClosingCashDialog";
+import CashSessionBanner from "@/components/pos/cash-session/CashSessionBanner";
+import SessionClosedSummary from "@/components/pos/cash-session/SessionClosedSummary";
+import AuditLogPanel from "@/components/pos/cash-session/AuditLogPanel";
 import type {
   CartItem,
   HeldBill,
@@ -16,26 +22,41 @@ import type {
   Product,
 } from "@/components/pos/types";
 
-const Index = () => {
+const CASHIER_NAME = "Kamal Perera";
+
+const IndexInner = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [showHeldBills, setShowHeldBills] = useState(false);
   const [showRecentSales, setShowRecentSales] = useState(false);
-  const [mobileTab, setMobileTab] = useState<"products" | "cart" | "checkout">(
-    "products"
-  );
+  const [showClosing, setShowClosing] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"products" | "cart" | "checkout">("products");
+
+  const {
+    session,
+    canSell,
+    startSession,
+    initiateClosing,
+    completeClosing,
+    cancelClosing,
+    getExpectedCash,
+    addSaleToCash,
+    auditLog,
+    cashSalesTotal,
+  } = useCashSession();
 
   const cartCount = cartItems.reduce((a, i) => a + i.quantity, 0);
+  const needsOpening = !session || session.status === "closed";
+  const isClosed = session?.status === "closed";
 
   const handleAddToCart = useCallback((product: Product, qty: number) => {
     setCartItems((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
         return prev.map((i) =>
-          i.product.id === product.id
-            ? { ...i, quantity: i.quantity + qty }
-            : i
+          i.product.id === product.id ? { ...i, quantity: i.quantity + qty } : i
         );
       }
       return [...prev, { product, quantity: qty }];
@@ -48,9 +69,7 @@ const Index = () => {
       setCartItems((prev) => prev.filter((i) => i.product.id !== productId));
     } else {
       setCartItems((prev) =>
-        prev.map((i) =>
-          i.product.id === productId ? { ...i, quantity: qty } : i
-        )
+        prev.map((i) => (i.product.id === productId ? { ...i, quantity: qty } : i))
       );
     }
   }, []);
@@ -89,15 +108,8 @@ const Index = () => {
   }, []);
 
   const handleCompleteSale = useCallback(
-    (
-      paymentMethod: PaymentMethod,
-      cashReceived: number,
-      customerMobile: string
-    ) => {
-      const total = cartItems.reduce(
-        (a, i) => a + i.product.price * i.quantity,
-        0
-      );
+    (paymentMethod: PaymentMethod, cashReceived: number, customerMobile: string) => {
+      const total = cartItems.reduce((a, i) => a + i.product.price * i.quantity, 0);
       const sale: RecentSale = {
         id: crypto.randomUUID(),
         items: [...cartItems],
@@ -110,9 +122,10 @@ const Index = () => {
       };
       setRecentSales((prev) => [sale, ...prev]);
       setCartItems([]);
+      addSaleToCash(total, paymentMethod);
       toast.success("Sale completed!", { duration: 2000 });
     },
-    [cartItems]
+    [cartItems, addSaleToCash]
   );
 
   const handleCancelSale = useCallback(() => {
@@ -128,85 +141,125 @@ const Index = () => {
     toast.success(`Sending WhatsApp receipt for #${saleId.slice(0, 8)}`);
   }, []);
 
+  const handleEndShift = () => {
+    initiateClosing();
+    setShowClosing(true);
+  };
+
+  const handleCloseSession = (counts: any, total: number, reason?: string) => {
+    completeClosing(counts, total, reason);
+    setShowClosing(false);
+  };
+
+  const handleNewSession = () => {
+    // Reset to trigger opening dialog
+    // Session is already closed, so needsOpening will be true after context reset
+    window.location.reload();
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <HeaderBar
-        cashierName="Kamal Perera"
+        cashierName={CASHIER_NAME}
         heldBillsCount={heldBills.length}
         onHeldBills={() => setShowHeldBills(true)}
         onRecentSales={() => setShowRecentSales(true)}
         onAdminTools={() => toast.info("Admin Tools")}
         onSignOut={() => toast.info("Signed out")}
+        onAuditLog={() => setShowAuditLog(true)}
+        onEndShift={handleEndShift}
         isAdmin={true}
+        hasActiveSession={canSell}
       />
 
-      {/* Desktop / Tablet Layout */}
-      <div className="flex-1 hidden md:flex overflow-hidden">
-        {/* Products - Left */}
-        <div className="flex-1 min-w-0 border-r border-border">
-          <ProductSearchPanel
-            products={sampleProducts}
-            onAddToCart={handleAddToCart}
-          />
-        </div>
+      {/* Cash Session Banner */}
+      {canSell && <CashSessionBanner onEndShift={handleEndShift} />}
 
-        {/* Cart + Checkout - Right */}
-        <div className="w-[380px] lg:w-[420px] flex flex-col shrink-0 bg-card">
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <CartPanel
-                items={cartItems}
-                onUpdateQty={handleUpdateQty}
-                onRemove={handleRemove}
-              />
+      {/* Opening Cash Dialog - blocks POS */}
+      {needsOpening && !isClosed && (
+        <OpeningCashDialog
+          open={true}
+          cashierName={CASHIER_NAME}
+          onConfirm={(counts, total) => startSession(counts, total, CASHIER_NAME)}
+        />
+      )}
+
+      {/* Closed session summary */}
+      {isClosed && session ? (
+        <SessionClosedSummary
+          session={session}
+          onNewSession={handleNewSession}
+          onViewAuditLog={() => setShowAuditLog(true)}
+        />
+      ) : (
+        <>
+          {/* Desktop / Tablet Layout */}
+          <div className="flex-1 hidden md:flex overflow-hidden">
+            <div className="flex-1 min-w-0 border-r border-border">
+              <ProductSearchPanel products={sampleProducts} onAddToCart={handleAddToCart} />
             </div>
-            <div className="border-t border-border shrink-0 overflow-y-auto max-h-[55vh]">
-              <CheckoutPanel
-                items={cartItems}
-                onCompleteSale={handleCompleteSale}
-                onHoldBill={handleHoldBill}
-                onCancelSale={handleCancelSale}
-              />
+            <div className="w-[380px] lg:w-[420px] flex flex-col shrink-0 bg-card">
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  <CartPanel items={cartItems} onUpdateQty={handleUpdateQty} onRemove={handleRemove} />
+                </div>
+                <div className="border-t border-border shrink-0 overflow-y-auto max-h-[55vh]">
+                  <CheckoutPanel
+                    items={cartItems}
+                    onCompleteSale={handleCompleteSale}
+                    onHoldBill={handleHoldBill}
+                    onCancelSale={handleCancelSale}
+                  />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Mobile Layout */}
-      <div className="flex-1 md:hidden overflow-hidden pb-14">
-        {mobileTab === "products" && (
-          <ProductSearchPanel
-            products={sampleProducts}
-            onAddToCart={(product, qty) => {
-              handleAddToCart(product, qty);
-            }}
-          />
-        )}
-        {mobileTab === "cart" && (
-          <div className="h-full overflow-y-auto">
-            <CartPanel
-              items={cartItems}
-              onUpdateQty={handleUpdateQty}
-              onRemove={handleRemove}
-            />
+          {/* Mobile Layout */}
+          <div className="flex-1 md:hidden overflow-hidden pb-14">
+            {mobileTab === "products" && (
+              <ProductSearchPanel products={sampleProducts} onAddToCart={handleAddToCart} />
+            )}
+            {mobileTab === "cart" && (
+              <div className="h-full overflow-y-auto">
+                <CartPanel items={cartItems} onUpdateQty={handleUpdateQty} onRemove={handleRemove} />
+              </div>
+            )}
+            {mobileTab === "checkout" && (
+              <div className="h-full overflow-y-auto">
+                <CheckoutPanel
+                  items={cartItems}
+                  onCompleteSale={handleCompleteSale}
+                  onHoldBill={handleHoldBill}
+                  onCancelSale={handleCancelSale}
+                />
+              </div>
+            )}
           </div>
-        )}
-        {mobileTab === "checkout" && (
-          <div className="h-full overflow-y-auto">
-            <CheckoutPanel
-              items={cartItems}
-              onCompleteSale={handleCompleteSale}
-              onHoldBill={handleHoldBill}
-              onCancelSale={handleCancelSale}
-            />
-          </div>
-        )}
-      </div>
 
-      <MobileTabBar
-        activeTab={mobileTab}
-        onTabChange={setMobileTab}
-        cartCount={cartCount}
+          <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} cartCount={cartCount} />
+        </>
+      )}
+
+      {/* Closing Cash Dialog */}
+      <ClosingCashDialog
+        open={showClosing}
+        onClose={() => {
+          setShowClosing(false);
+          cancelClosing();
+        }}
+        cashierName={CASHIER_NAME}
+        expectedCash={getExpectedCash()}
+        openingCash={session?.opening.total || 0}
+        cashSalesTotal={cashSalesTotal}
+        onConfirm={handleCloseSession}
+      />
+
+      {/* Audit Log */}
+      <AuditLogPanel
+        open={showAuditLog}
+        onClose={() => setShowAuditLog(false)}
+        entries={auditLog}
       />
 
       <HeldBillsDrawer
@@ -227,5 +280,11 @@ const Index = () => {
     </div>
   );
 };
+
+const Index = () => (
+  <CashSessionProvider>
+    <IndexInner />
+  </CashSessionProvider>
+);
 
 export default Index;
