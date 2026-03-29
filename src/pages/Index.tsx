@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/components/auth/AuthContext";
 import HeaderBar from "@/components/pos/HeaderBar";
 import ProductSearchPanel from "@/components/pos/ProductSearchPanel";
 import CartPanel from "@/components/pos/CartPanel";
@@ -22,9 +23,10 @@ import type {
   Product,
 } from "@/components/pos/types";
 
-const CASHIER_NAME = "Kamal Perera";
-
 const IndexInner = () => {
+  const { user, logout } = useAuth();
+  const cashierName = user?.displayName || "Unknown";
+  const isAdmin = user?.role === "admin" || user?.role === "manager";
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
@@ -160,15 +162,15 @@ const IndexInner = () => {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <HeaderBar
-        cashierName={CASHIER_NAME}
+        cashierName={cashierName}
         heldBillsCount={heldBills.length}
         onHeldBills={() => setShowHeldBills(true)}
         onRecentSales={() => setShowRecentSales(true)}
         onAdminTools={() => toast.info("Admin Tools")}
-        onSignOut={() => toast.info("Signed out")}
+        onSignOut={logout}
         onAuditLog={() => setShowAuditLog(true)}
         onEndShift={handleEndShift}
-        isAdmin={true}
+        isAdmin={isAdmin}
         hasActiveSession={canSell}
       />
 
@@ -179,8 +181,8 @@ const IndexInner = () => {
       {needsOpening && !isClosed && (
         <OpeningCashDialog
           open={true}
-          cashierName={CASHIER_NAME}
-          onConfirm={(counts, total) => startSession(counts, total, CASHIER_NAME)}
+          cashierName={cashierName}
+          onConfirm={(counts, total) => startSession(counts, total, cashierName)}
         />
       )}
 
@@ -248,7 +250,7 @@ const IndexInner = () => {
           setShowClosing(false);
           cancelClosing();
         }}
-        cashierName={CASHIER_NAME}
+        cashierName={cashierName}
         expectedCash={getExpectedCash()}
         openingCash={session?.opening.total || 0}
         cashSalesTotal={cashSalesTotal}
