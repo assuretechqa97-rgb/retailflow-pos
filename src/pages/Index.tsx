@@ -167,10 +167,10 @@ const IndexInner = () => {
         onHeldBills={() => setShowHeldBills(true)}
         onRecentSales={() => setShowRecentSales(true)}
         onAdminTools={() => toast.info("Admin Tools")}
-        onSignOut={() => toast.info("Signed out")}
+        onSignOut={logout}
         onAuditLog={() => setShowAuditLog(true)}
         onEndShift={handleEndShift}
-        isAdmin={true}
+        isAdmin={isAdmin}
         hasActiveSession={canSell}
       />
 
