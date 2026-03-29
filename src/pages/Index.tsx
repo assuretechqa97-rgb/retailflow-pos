@@ -162,7 +162,7 @@ const IndexInner = () => {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <HeaderBar
-        cashierName={CASHIER_NAME}
+        cashierName={cashierName}
         heldBillsCount={heldBills.length}
         onHeldBills={() => setShowHeldBills(true)}
         onRecentSales={() => setShowRecentSales(true)}
@@ -181,8 +181,8 @@ const IndexInner = () => {
       {needsOpening && !isClosed && (
         <OpeningCashDialog
           open={true}
-          cashierName={CASHIER_NAME}
-          onConfirm={(counts, total) => startSession(counts, total, CASHIER_NAME)}
+          cashierName={cashierName}
+          onConfirm={(counts, total) => startSession(counts, total, cashierName)}
         />
       )}
 
@@ -250,7 +250,7 @@ const IndexInner = () => {
           setShowClosing(false);
           cancelClosing();
         }}
-        cashierName={CASHIER_NAME}
+        cashierName={cashierName}
         expectedCash={getExpectedCash()}
         openingCash={session?.opening.total || 0}
         cashSalesTotal={cashSalesTotal}
