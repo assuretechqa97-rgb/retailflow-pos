@@ -23,9 +23,10 @@ import type {
   Product,
 } from "@/components/pos/types";
 
-const CASHIER_NAME = "Kamal Perera";
-
 const IndexInner = () => {
+  const { user, logout } = useAuth();
+  const cashierName = user?.displayName || "Unknown";
+  const isAdmin = user?.role === "admin" || user?.role === "manager";
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
